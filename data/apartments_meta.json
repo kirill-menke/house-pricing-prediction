@@ -1,0 +1,21 @@
+[
+    {"name": "id", "type": "integer_id", "desc": "Unique ID for apartment"}, 
+    {"name": "seller", "type": "categorical", "desc": "The type of apartment seller", "cats": ["Owner", "Company", "Agents", "Developer"]}, 
+    {"name": "price", "type": "real", "desc": "The listed price of the apartment (TARGET)"}, 
+    {"name": "area_total", "type": "real", "desc": "Total area of the apartment"},
+    {"name": "area_kitchen", "type": "real", "desc": "Total kitchen area in the apartment"}, 
+    {"name": "area_living", "type": "real", "desc": "Total living space area in the apartment"}, 
+    {"name": "floor", "type": "integer", "desc": "Primary building floor of the apartment"}, 
+    {"name": "rooms", "type": "integer", "desc": "Number of rooms in the apartment"}, 
+    {"name": "layout", "type": "categorical", "desc": "Overal apartment layout", "cats": ["Adjacent", "Isolated", "Adjacent_isolated"]}, 
+    {"name": "ceiling", "type": "real", "desc": "Ceiling height in the apartment"}, 
+    {"name": "bathrooms_shared", "type": "integer", "desc": "Number of shared bathrooms"}, 
+    {"name": "bathrooms_private", "type": "integer", "desc": "Number of private bathrooms"}, 
+    {"name": "windows_court", "type": "boolean", "desc": "Whether the apartment has windows facing a courtyard"}, 
+    {"name": "windows_street", "type": "boolean", "desc": "Whether the apartment has windows facing a street"}, 
+    {"name": "balconies", "type": "integer", "desc": "Number of balconies in the apartment"}, 
+    {"name": "loggias", "type": "integer", "desc": "Number of loggias in the apartment (balcony-like, google it)"}, 
+    {"name": "condition", "type": "categorical", "desc": "Current condition of the apartment", "cats": ["Undecorated", "Decorated", "Euro_repair", "Special_design"]}, 
+    {"name": "phones", "type": "integer", "desc": "Number of phone numbers associated with the advert"}, 
+    {"name": "building_id", "type": "integer_id", "desc": "ID used to map apartments to buildings"}
+]

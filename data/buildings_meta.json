@@ -1,0 +1,18 @@
+[
+    {"name": "id", "type": "integer_id", "desc": "Unique ID of building for joining with apartments"}, 
+    {"name": "new", "type": "boolean", "desc": "Whether it is an old or new building"}, 
+    {"name": "latitude", "type": "real", "desc": "Latitude coordinate of building"}, 
+    {"name": "longitude", "type": "real", "desc": "Longitude coordinate of building"}, 
+    {"name": "district", "type": "categorical", "desc": "Administriative district within Moscow", "cats": ["Central", "North", "North-East", "East", "South-East", "South", "South-West", "West", "North-West", "Zelenograd", "Troitsk", "Novomoskovsk"]}, 
+    {"name": "street", "type": "string", "desc": "Bulding street name"}, 
+    {"name": "address", "type": "string", "desc": "Building address (within street)"}, 
+    {"name": "constructed", "type": "integer", "desc": "Year when the building was constructed"}, 
+    {"name": "material", "type": "categorical", "desc": "Primary building material used in building", "cats": ["Bricks", "Wood", "Monolith", "Panel", "Block", "Monolithic_brick", "Stalin_project"]}, 
+    {"name": "stories", "type": "integer", "desc": "Total number of floors in the building"}, 
+    {"name": "elevator_without", "type": "boolean", "desc": "Whether the building has apartments without elevator access"}, 
+    {"name": "elevator_passenger", "type": "boolean", "desc": "Whether the building has apartments with passenger elevator access"}, 
+    {"name": "elevator_service", "type": "boolean", "desc": "Whether the building has apartments with service elevator access"}, 
+    {"name": "parking", "type": "categorical", "desc": "Parking options for building", "cats": ["Ground", "Underground", "Multilevel"]}, 
+    {"name": "garbage_chute", "type": "boolean", "desc": "Whether the building has a garbage chute system"}, 
+    {"name": "heating", "type": "categorical", "desc": "Primary heating system used in the building", "cats": ["Central", "Individual", "Boiler", "Autonomous_boiler"]}
+]
