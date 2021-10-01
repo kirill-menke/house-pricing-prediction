@@ -15,7 +15,7 @@ def get_training_model():
     model_xgb = XGBRegressor(n_estimators=1500, max_depth=4, n_jobs=-1, booster='gbtree')
     trans_xgb = TransformedTargetRegressor(regressor=model_xgb, func=np.log1p, inverse_func=np.expm1)
 
-    model_cat = CatBoostRegressor(iterations=2000,  depth=7, silent=True, learning_rate=0.15, l2_leaf_reg=0.45)
+    model_cat = CatBoostRegressor(iterations=2000,  depth=7, learning_rate=0.15, l2_leaf_reg=0.45, silent=True)
     trans_cat = TransformedTargetRegressor(regressor=model_cat, func=np.log1p, inverse_func=np.expm1)
 
     model_knn_256 = KNeighborsRegressor(n_neighbors=256)
@@ -41,5 +41,5 @@ def get_training_model():
 
 def get_importance_selector():
     selection_model = XGBRegressor(n_estimators=1500, max_depth=4, n_jobs=-1, booster='gbtree')
-    importance_selector = SelectFromModel(selection_model, threshold=-np.inf, max_features=18) # 29
+    importance_selector = SelectFromModel(selection_model, threshold=-np.inf, max_features=20) # 29
     return importance_selector
