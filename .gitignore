@@ -1,4 +1,7 @@
 *.csv
 *.pdf
+*.pkl
+
 catboost_info
+tmp_autosklearn
 __pycache__
