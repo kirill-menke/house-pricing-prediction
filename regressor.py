@@ -130,7 +130,7 @@ if __name__ == "__main__":
             per_run_time_limit=int(sys.argv[3]),
             tmp_folder='/proj/ciptmp/ny70konu/tmp_autosklearn',
             n_jobs=4,
-            memory_limit=15000,
+            memory_limit=20000,
             metric=autosklearn.metrics.mean_squared_log_error,
             scoring_functions=[autosklearn.metrics.mean_squared_log_error]
         )
