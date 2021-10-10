@@ -120,7 +120,7 @@ if __name__ == "__main__":
 
         import autosklearn.regression
         from autosklearn.metrics import make_scorer, mean_squared_log_error, mean_squared_error
-        
+
         preprocessor = get_preprocessor(X_train)
         X_train = preprocessor.fit_transform(X_train)
         X_val = preprocessor.transform(X_val)
@@ -132,6 +132,8 @@ if __name__ == "__main__":
             n_jobs=4,
             memory_limit=20000,
             metric=autosklearn.metrics.mean_squared_log_error,
+            # resampling_strategy='cv',
+            # resampling_strategy_arguments={'folds': 5},
             scoring_functions=[autosklearn.metrics.mean_squared_log_error]
         )
 
@@ -153,6 +155,9 @@ if __name__ == "__main__":
             grid=True,
         )
         plt.savefig("Performance over time")
+
+        # Refitting found ensemble with whole data
+        automl.refit(X_train, y_train)
 
         # Evaluate the model on validation data
         y_pred = automl.predict(X_val)
