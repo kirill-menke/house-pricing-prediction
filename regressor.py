@@ -19,6 +19,7 @@ from sklearn.ensemble import VotingRegressor
 import seaborn as sns
 import matplotlib.pyplot as plt
 
+
 from model import get_importance_selector, get_training_model
 
 
@@ -68,11 +69,57 @@ def create_new_features(train_df, test_df):
 
     dists_train = np.min(np.linalg.norm(house_locs_train[:, np.newaxis, :] - metro_locs, axis=2), axis=1)
     dists_test = np.min(np.linalg.norm(house_locs_test[:, np.newaxis, :] - metro_locs, axis=2), axis=1)
-    train_df['closest_metro'] = dists_train
-    test_df['closest_metro'] = dists_test
+    #train_df['closest_metro'] = dists_train
+    #test_df['closest_metro'] = dists_test
 
+    metro_coords = pd.read_csv("data/metro_stations.csv")
+    broadcasted_lat_train = np.broadcast_to(np.expand_dims(np.asarray(train_df['latitude']), axis = 1), (23285,275))
+    broadcasted_long_train = np.broadcast_to(np.expand_dims(np.asarray(train_df['longitude']), axis = 1), (23285,275))
+    broadcasted_lat_test = np.broadcast_to(np.expand_dims(np.asarray(test_df['latitude']), axis = 1), (9937,275))
+    broadcasted_long_test = np.broadcast_to(np.expand_dims(np.asarray(test_df['longitude']), axis = 1), (9937,275))
+    broadcasted_metro_lat_train = np.broadcast_to(np.expand_dims(np.asarray(metro_coords['latitude']), axis=1).T, (23285,275))
+    broadcasted_metro_long_train = np.broadcast_to(np.expand_dims(np.asarray(metro_coords['longitude']), axis=1).T, (23285,275))
+    broadcasted_metro_lat_test = np.broadcast_to(np.expand_dims(np.asarray(metro_coords['latitude']), axis=1).T, (9937,275))
+    broadcasted_metro_long_test = np.broadcast_to(np.expand_dims(np.asarray(metro_coords['longitude']), axis=1).T, (9937,275))
+
+    walkable_metro_train = np.sum((haversine_array(broadcasted_lat_train, broadcasted_long_train, broadcasted_metro_lat_train, broadcasted_metro_long_train) <= 0.4), axis = 1)
+    walkable_metro_test = np.sum((haversine_array(broadcasted_lat_test, broadcasted_long_test, broadcasted_metro_lat_test, broadcasted_metro_long_test) <= 0.4), axis = 1) 
+  
+
+    #train_df['walkable_metro'] = np.where(walkable_metro_train>0, 1, 0)
+    #test_df['walkable_metro'] = np.where(walkable_metro_test>0, 1, 0)
+
+    train_df['walkable_metro'] = walkable_metro_train
+    test_df['walkable_metro'] = walkable_metro_test
+
+    #Area percentage
+    train_df['kitchen_area_percentage']= train_df['area_kitchen']/train_df['area_total']
+    test_df['kitchen_area_percentage']= test_df['area_kitchen']/test_df['area_total']
+
+    train_df['living_area_percentage']= train_df['area_living']/train_df['area_total']
+    test_df['living_area_percentage']= test_df['area_living']/test_df['area_total']
+
+    #Floor of the building: worst floors are the first and the last one
+    good_floor_test= np.where((test_df['floor'] == 1) | (test_df['floor'] == test_df['stories']), 1, 0)
+    good_floor_train= np.where((train_df['floor'] == 1) | (train_df['floor'] == train_df['stories']), 1, 0)
+    train_df['good_floor']=good_floor_train
+    test_df['good_floor']=good_floor_test
+
+    #building material
+    #train_df['is_brick']= np.where((test_df['material'] == 'brick') | (test_df['floor'] == test_df['stories']), 1, 0)
+    #test_df['is_brick']= np.where((test_df['material'] == 'brick') | (test_df['floor'] == test_df['stories']), 1, 0)
+   
     return train_df, test_df
 
+
+def haversine_array(lat1, lng1, lat2 = 55.75, lng2 = 37.6):
+    lat1, lng1, lat2, lng2 = map(np.radians, (lat1, lng1, lat2, lng2))
+    AVG_EARTH_RADIUS = 6371  # in km
+    lat = lat2 - lat1
+    lng = lng2 - lng1
+    d = np.sin(lat * 0.5) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(lng * 0.5) ** 2
+    h = 2 * AVG_EARTH_RADIUS * np.arcsin(np.sqrt(d))
+    return h
 
 def fit_and_predict(X_train, y_train, X_val, preprocessor, cross_val=False):
 

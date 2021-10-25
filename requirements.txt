@@ -7,3 +7,6 @@ matplotlib==3.4.2
 scikit_learn==0.24.2
 missingno==0.5.0
 auto-sklearn==0.14.0; sys_platform == 'linux' and python_version >= '3.7'
+googlemaps=4.5.3
+simplejson=3.17.5
+#pip install --upgrade google-auth-oauthlib
