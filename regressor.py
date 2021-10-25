@@ -69,8 +69,8 @@ def create_new_features(train_df, test_df):
 
     dists_train = np.min(np.linalg.norm(house_locs_train[:, np.newaxis, :] - metro_locs, axis=2), axis=1)
     dists_test = np.min(np.linalg.norm(house_locs_test[:, np.newaxis, :] - metro_locs, axis=2), axis=1)
-    #train_df['closest_metro'] = dists_train
-    #test_df['closest_metro'] = dists_test
+    train_df['closest_metro'] = dists_train
+    test_df['closest_metro'] = dists_test
 
     metro_coords = pd.read_csv("data/metro_stations.csv")
     broadcasted_lat_train = np.broadcast_to(np.expand_dims(np.asarray(train_df['latitude']), axis = 1), (23285,275))
@@ -106,8 +106,8 @@ def create_new_features(train_df, test_df):
     test_df['good_floor']=good_floor_test
 
     #building material
-    #train_df['is_brick']= np.where((test_df['material'] == 'brick') | (test_df['floor'] == test_df['stories']), 1, 0)
-    #test_df['is_brick']= np.where((test_df['material'] == 'brick') | (test_df['floor'] == test_df['stories']), 1, 0)
+    train_df['is_brick']= np.where(train_df['material'] == 'Bricks', 1, 0)
+    test_df['is_brick']= np.where(test_df['material'] == 'Bricks', 1, 0)
    
     return train_df, test_df
 
