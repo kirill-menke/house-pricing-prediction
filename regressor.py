@@ -6,7 +6,7 @@ import pickle
 
 import sklearn.metrics
 from sklearn.experimental import enable_iterative_imputer
-from sklearn.model_selection import train_test_split, cross_val_score, cross_validate, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score, cross_validate, GridSearchCV, StratifiedGroupKFold, GroupKFold
 from sklearn.impute import SimpleImputer, IterativeImputer, KNNImputer
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
@@ -15,11 +15,13 @@ from sklearn.metrics import make_scorer, mean_squared_log_error
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import QuantileTransformer
 from sklearn.ensemble import VotingRegressor
+from sklearn.neighbors import BallTree
 
 import seaborn as sns
 import matplotlib.pyplot as plt
 
 from model import get_importance_selector, get_training_model
+from transformers import MeanSqmPrice
 
 
 def rmsle(y_true, y_pred):
@@ -38,7 +40,7 @@ def get_preprocessor(X_train):
 
     categorical_transformer = Pipeline(steps=[
         ('imputer', SimpleImputer(strategy="most_frequent")),
-        ('oh_encoder', OneHotEncoder(sparse=True, handle_unknown="ignore"))
+        ('oh_encoder', OneHotEncoder(sparse=False, handle_unknown="ignore"))
     ])
 
     preprocessor = ColumnTransformer(
@@ -51,15 +53,78 @@ def get_preprocessor(X_train):
 
 
 def create_new_features(train_df, test_df):
+
+    # Encode string adresses to integers
+    string_encoder = LabelEncoder()
+    train_df["address"] = string_encoder.fit_transform(train_df["address"])
+    train_df["street"] = string_encoder.fit_transform(train_df["street"])
+
+    # Replacing wrong locations with correct
+    train_df.loc[(train_df["street"] == "Бунинские Луга ЖК") & (train_df["address"] == "к2/2/1"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    train_df.loc[(train_df["street"] == "Бунинские Луга ЖК") & (train_df["address"] == "к2/2/2"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    train_df.loc[(train_df["street"] == "улица 1-я Линия") & (train_df["address"] == "57"), ["latitude", "longitude"]] = [55.6324711, 37.4536057]
+    train_df.loc[(train_df["street"] == "улица Центральная") & (train_df["address"] == "75"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    train_df.loc[(train_df["street"] == "улица Центральная") & (train_df["address"] == "48"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    
+    test_df.loc[(test_df["street"] == "Бунинские Луга ЖК") & (test_df["address"] == "к2/2/1"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    test_df.loc[(test_df["street"] == "Бунинские Луга ЖК") & (test_df["address"] == "к2/2/2"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    test_df.loc[(test_df["street"] == "улица 1-я Линия") & (test_df["address"] == "57"), ["latitude", "longitude"]] = [55.6324711, 37.4536057]
+    test_df.loc[(test_df["street"] == "улица Центральная") & (test_df["address"] == "75"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    test_df.loc[(test_df["street"] == "улица Центральная") & (test_df["address"] == "48"), ["latitude", "longitude"]] = [55.5415152, 37.4821752]
+    
+    # Replacing Nan locations
+    train_df.loc[(train_df["street"] == "пос. Коммунарка Москва") & (train_df["address"] == "А101 ЖК"), ["latitude", "longitude"]] = [55.5676692, 37.4816608]
+    test_df.loc[(test_df["street"] == "пос. Коммунарка") & (test_df["address"] == "Москва А101 ЖК"), ["latitude", "longitude"]] = [55.5676692, 37.4816608]
+
+    # Rescaling out of scale ceilings
+    # train_df.ceiling[train_df.ceiling > 200] = train_df.ceiling/100
+    # train_df.ceiling[(train_df.ceiling > 25) & (train_df.ceiling < 200)] = train_df.ceiling/10
+
+    # Unifying features
+    # train_df["street_and_address"] = train_df.street + " " + train_df.address
+    # train_df["bathrooms"] = train_df.bathrooms_shared  + train_df.bathrooms_private
+    # train_df["balconies_and_loggias"] = train_df.balconies + train_df.loggias
+
+    # Dropping duplicates
+    # train_df = train_df.drop(train_df[train_df.duplicated()].index, axis = 0)
+
+    # Average sqm price in neighborhood of each house
+    # tree = BallTree(train_df[["latitude", "longitude"]])
+
+    # dist_train, ind_train = tree.query(train_df[["latitude", "longitude"]], k=3)
+    # dist_test, ind_test = tree.query(test_df[["latitude", "longitude"]], k=3)
+
+    # mean_sqm_price_of_cluster_train = []
+    # for row in ind_train:
+    #     mean_sqm_price_of_cluster_train.append(np.mean(train_df.price.iloc[row]/train_df.area_total.iloc[row]))
+
+    # mean_sqm_price_of_cluster_test = []
+    # for row in ind_test:
+    #     mean_sqm_price_of_cluster_test.append(np.mean(train_df.price.iloc[row]/train_df.area_total.iloc[row]))
+
+    # train_df["mean_sqm_price_of_cluster"] = mean_sqm_price_of_cluster_train
+    # test_df["mean_sqm_price_of_cluster"] = mean_sqm_price_of_cluster_test
+
     # Distance from red square
     center = np.array([37.621, 55.754]) # longitude, latitude
     train_df['center_distance'] = np.linalg.norm(train_df[['longitude', 'latitude']] - center, axis=1)
     test_df['center_distance'] = np.linalg.norm(test_df[['longitude', 'latitude']] - center, axis=1)
 
-    # Average price per district
-    # mean_price = train_df.groupby('district').mean().reset_index()[['district', 'price']]
-    # train_df = train_df.merge(mean_price, how='left', on='district', suffixes=('', '_avg'))
-    # test_df = test_df.merge(mean_price, how='left', on='district').rename(columns={'price' : 'price_avg'}).set_index(test_df.index)
+    # Price per sqm district
+    # price_per_district = train_df.groupby("district").mean().price
+    # area_per_district = train_df.groupby("district").mean().area_total
+
+    # train_df["price_per_sq_dist_cat"], bins = pd.qcut(train_df.center_distance, q = 150, retbins = True)
+    # price_per_dist = train_df.groupby("price_per_sq_dist_cat").mean().price
+    # area_per_dist = train_df.groupby("price_per_sq_dist_cat").mean().area_total
+
+    # a = np.log(price_per_district/area_per_district)
+    # b = np.log(price_per_dist/area_per_dist)
+
+    # train_df = pd.concat([train_df, pd.DataFrame(columns = ["sqm_per_dist"])], axis = 1)
+    # train_df["district"] = train_df["district"].map(a).astype(float)
+    # train_df["sqm_per_dist"] = train_df["price_per_sq_dist_cat"].map(b).astype(float)
+    # train_df = train_df.drop("price_per_sq_dist_cat", axis = 1)
 
     # Distance to nearest metro station
     metro_locs = pd.read_csv("data/metro_stations.csv").to_numpy()
@@ -78,23 +143,60 @@ def fit_and_predict(X_train, y_train, X_val, preprocessor, cross_val=False):
 
     pipeline = Pipeline(steps=[
         ('preprocessor', preprocessor),
+        # ("mean_sqm", MeanSqmPrice(y_train, X_train['area_total'])),
         ('model', get_training_model())
     ])
 
     if cross_val:
         print("Performing cross-validation ...")
-        # scores = cross_val_score(pipeline, X_train, y_train, scoring=make_scorer(rmsle), cv=5, n_jobs=-1)
-        cv_results = cross_validate(pipeline, X_train, y_train, scoring=make_scorer(rmsle), cv=5, n_jobs=-1, return_estimator=True)
         
-        scores = scores = cv_results["test_score"]
-        print("Cross-validation scores:", scores)
-        print(f"RMSLE mean: {scores.mean():.4f}, RMSLE std: {scores.std():.4f}\n")
+        # Exclusion of building IDs
+        cv = StratifiedGroupKFold()
+        errors = []
+        estimators = []
+        pd.options.mode.chained_assignment = None
+        for train_idxs, val_idxs in cv.split(X_train, np.log(y_train).round(), groups=X_train['building_id']):
+            X_train_l, X_val_l = X_train.iloc[train_idxs], X_train.iloc[val_idxs]
+            y_train_l, y_val_l = y_train.iloc[train_idxs], y_train.iloc[val_idxs]
+            
+            # Add Clustering: Average sqm price in the neighborhood
+            # tree = BallTree(X_train_l[["latitude", "longitude"]])
+            # dist_train, ind_train = tree.query(X_train_l[["latitude", "longitude"]], k=5)
+            # dist_val, ind_val = tree.query(X_val_l[["latitude", "longitude"]], k=5)
+
+            # mean_sqm_price_of_cluster_train = []
+            # for row in ind_train:
+            #     mean_sqm_price_of_cluster_train.append(np.mean(y_train_l.iloc[row]/X_train_l.area_total.iloc[row]))
+            
+
+            # mean_sqm_price_of_cluster_val = []
+            # for row in ind_val:
+            #     mean_sqm_price_of_cluster_val.append(np.mean(y_train_l.iloc[row]/X_train_l.area_total.iloc[row]))
+
+            # X_train_l["mean_sqm_price_of_cluster"] = y_train_l # mean_sqm_price_of_cluster_train
+            # X_val_l["mean_sqm_price_of_cluster"] = y_val_l # mean_sqm_price_of_cluster_val
+
+            estimators.append(pipeline.fit(X_train_l, y_train_l))
+            preds = pipeline.predict(X_val_l)
+
+            error = rmsle(y_val_l, preds)
+            errors.append(error)
+            print("RMSLE:", error)
+
+        print("Average: ", np.mean(errors))
+
+        # cv_results = cross_validate(pipeline, X_train, y_train, scoring=make_scorer(rmsle), cv=cv, groups=X_train['building_id'], n_jobs=-1, return_estimator=True)        
+        # scores = scores = cv_results["test_score"]
+        # print("Cross-validation scores:", scores)
+        # print(f"RMSLE mean: {scores.mean():.4f}, RMSLE std: {scores.std():.4f}\n")
+        
 
         # Model takes average of all predictors
-        model = VotingRegressor(list(enumerate(cv_results["estimator"])))
-        model.estimators_ = cv_results["estimator"]
+        model = VotingRegressor(list(enumerate(estimators)))
+        model.estimators_ = estimators
         model.le_ = LabelEncoder().fit(y_train)
         model.classes_ = model.le_.classes_
+
 
     else:
         pipeline.verbose = True
@@ -103,7 +205,6 @@ def fit_and_predict(X_train, y_train, X_val, preprocessor, cross_val=False):
         print("Fitting model ...")
         pipeline.fit(X_train, y_train)
         model = pipeline
-
 
     # Preprocessing of validation data, get predictions
     print("Predicting ...")
@@ -128,11 +229,12 @@ if __name__ == "__main__":
     train_df, test_df = create_new_features(train_df, test_df)
 
     # Splitting data into train and validation set
-    X_train, X_val, y_train, y_val = train_test_split(train_df, train_df.price, train_size=0.9996, random_state=1, stratify=np.log(train_df.price).round())
-    X_train = X_train.drop(['building_id', 'price', 'id_r'], axis=1)
-    X_val = X_val.drop(['building_id', 'price', 'id_r'], axis=1)
-    X_test = test_df.drop(['building_id', 'id_r'], axis=1)
-    
+    X_train, X_val, y_train, y_val = train_test_split(train_df, train_df.price, train_size=0.99965, random_state=42, stratify=np.log(train_df.price).round())
+    X_train = X_train.drop(['id_r', 'price'], axis=1) # 'building_id'
+    X_val = X_val.drop(['price', 'id_r'], axis=1) # 'building_id'
+    X_test = test_df.drop(['id_r'], axis=1) # 'building_id'
+
+
     if sys.argv[1] == "test":
         preprocessor = get_preprocessor(X_train)
         y_pred = fit_and_predict(X_train, y_train, X_test, preprocessor, cross_val=True)
@@ -156,14 +258,14 @@ if __name__ == "__main__":
         ])
         
         grid_lgbm = {
-              'model__regressor__n_estimators': np.arange(100, 2000, 100),  
-              'model__regressor__max_depth': np.arange(3, 13, 1),
-              'model__regressor__num_leaves': np.arange(2**3, 2**12, 250),
+              'model__regressor__n_estimators': np.arange(3900, 5100, 100),  
+              'model__regressor__max_depth': [8],
+              'model__regressor__num_leaves': np.arange(2**3, 2**12, 100),
               'model__regressor__learning_rate': [0.1]
         }
 
         grid_catboost = {
-              'model__regressor__iterations': np.arange(100, 2500, 100),  
+              'model__regressor__iterations': np.arange(2400, 3500, 100),  
               'model__regressor__depth': np.arange(3, 10, 1),
               # 'model__regressor__l2_leaf_reg': np.arange(0.1, 1.0, 0.05),
               'model__regressor__learning_rate': [0.15]
@@ -171,9 +273,9 @@ if __name__ == "__main__":
 
         grid_xgboost = {
               'model__regressor__n_estimators': np.arange(100, 2500, 100),  
-              'model__regressor__max_depth': np.arange(3, 10, 1),
-              'model__regressor__reg_lambda': np.arange(0.1, 1.0, 0.05),
-              'model__regressor__learning_rate': [0.1, 0.15, 0.2]
+              'model__regressor__max_depth': np.arange(3, 12, 1),
+              # 'model__regressor__reg_lambda': np.arange(0.1, 1.0, 0.05),
+              # 'model__regressor__learning_rate': [0.1, 0.15, 0.2]
         }
         
         grid = GridSearchCV(pipeline, grid_catboost, scoring=make_scorer(rmsle, greater_is_better=False), cv=5, refit=True, verbose=2, n_jobs=-1)
