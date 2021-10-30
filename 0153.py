@@ -3,7 +3,7 @@ from math import radians
 import numpy as np
 import pandas as pd
 
-from sklearn.neighbors import BallTree
+from sklearn.neighbors import BallTree, KNeighborsRegressor
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.linear_model import RidgeCV
 from sklearn.ensemble import StackingRegressor, ExtraTreesRegressor
@@ -20,7 +20,7 @@ from lightgbm import LGBMRegressor
 
 pd.options.mode.chained_assignment = None
 seed = np.random.seed(0)
-THREADS = -2
+THREADS = 4
 
 def rmsle(y_true, y_pred):
     return np.sqrt(mean_squared_log_error(y_true, y_pred))
@@ -86,7 +86,7 @@ def add_features(data_df):
 
 def get_model():
 
-    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1) # , n_jobs=THREADS
+    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1, n_jobs=THREADS)
     model_xgb = XGBRegressor(n_estimators=1500, max_depth=6, learning_rate=0.1)
     model_cat = CatBoostRegressor(iterations=1000, depth=7, learning_rate=0.1, silent=True)
     model_extra = ExtraTreesRegressor(n_estimators=1000)
@@ -108,7 +108,7 @@ def get_model():
     model_stacking = StackingRegressor(estimators=base_learners, final_estimator=final_model, cv=5, n_jobs=THREADS)
     trans_stacking = TransformedTargetRegressor(regressor=model_stacking, func=np.log1p, inverse_func=np.expm1)
 
-    return trans_lgbm
+    return trans_stacking
 
 
 
@@ -136,22 +136,23 @@ if __name__ == "__main__":
     add_features(data_df)
 
     data_df = data_df.drop(["address", "street", "windows_court", "windows_street", "elevator_service", "elevator_passenger", "garbage_chute", 
-        "layout", "parking", "heating", "elevator_without", "material", "phones", "district", "building_id", "id_r"], axis = 1) 
+        "layout", "parking", "heating", "elevator_without", "material", "phones", "district", "building_id", "id_r"], axis = 1)
     # "seller", "bathrooms_shared", "bathrooms_private", "balconies", "loggias"
 
 
     categorical_features = ["condition", "seller", "new", "street_and_address", "sub_area"]
-    num_features = list(data_df.drop(categorical_features, axis=1).columns)
+    num_features = list(data_df.drop(categorical_features + ["price"], axis=1).columns)
 
     # Adding missing values as separate features
-    nan_features = data_df.drop('price', axis=1).isna().astype(int)
+    # nan_features = data_df.drop('price', axis=1).isna().astype(int)
 
     # Impute missing values
-    iter_imputer = IterativeImputer()
-    data_df[num_features + categorical_features] = iter_imputer.fit_transform(data_df[num_features + categorical_features])
+    # data_df[num_features + categorical_features] = IterativeImputer().fit_transform(data_df[num_features + categorical_features])
+    # data_df[num_features] = SimpleImputer(strategy="mean").fit_transform(data_df[num_features])
+    # data_df[categorical_features] = SimpleImputer(strategy="most_frequent").fit_transform(data_df[categorical_features])
 
-    data_df = pd.merge(data_df, nan_features, left_index=True, right_index=True)
-
+    # data_df = pd.merge(data_df, nan_features, left_index=True, right_index=True)
+    
     data_df.fillna(-999, inplace = True)
 
     # oh_encoder = OneHotEncoder(sparse=False)
@@ -165,28 +166,29 @@ if __name__ == "__main__":
 
 
     # Perform cross-validation and prediction on test set
-    errors = []
-    preds = []
+    # errors = []
+    # preds = []
 
-    cv = StratifiedGroupKFold()
+    # cv = StratifiedGroupKFold()
     model = get_model()
 
-    for train_idx, test_idx in cv.split(X_train, np.log(y_train).round(), groups=train_df['building_id']):
+    # for train_idx, val_idx in cv.split(X_train, np.log(y_train).round(), groups=train_df['building_id']):
 
-        X_train_, y_train_ = X_train.iloc[train_idx], y_train.iloc[train_idx]
-        X_val, y_val = X_train.iloc[test_idx], y_train.iloc[test_idx]
+    #     X_train_, y_train_ = X_train.iloc[train_idx], y_train.iloc[train_idx]
+    #     X_val, y_val = X_train.iloc[val_idx], y_train.iloc[val_idx]
 
-        model.fit(X_train_, y_train_)
-        pred = model.predict(X_val)
-        errors.append(rmsle(y_val, pred))
+    #     model.fit(X_train_, y_train_)
+    #     pred = model.predict(X_val)
+    #     errors.append(rmsle(y_val, pred))
 
-        preds.append(model.predict(X_test))
+    #     preds.append(model.predict(X_test))
 
-        print("Error: ", errors[-1])
-    print("Mean error: ", np.mean(errors))
+    #     print("Error: ", errors[-1])
+    # print("Mean error: ", np.mean(errors))
 
 
-    y_pred = np.mean(preds, axis = 0)
+    # y_pred = np.mean(preds, axis = 0)
+    y_pred = model.fit(X_train, y_train).predict(X_test)
     result = np.column_stack((X_test.index.to_numpy(), y_pred))
     np.savetxt(r'./result.csv', result, fmt=['%d', '%.3f'], delimiter=',', header="id,price_prediction", comments='')
 
