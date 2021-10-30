@@ -165,9 +165,9 @@ if __name__ == "__main__":
     print("Mean error: ", np.mean(errors))
 
 
-y_pred = np.mean(preds, axis = 0)
-result = np.column_stack((X_test.index.to_numpy(), y_pred))
-np.savetxt(r'./result.csv', result, fmt=['%d', '%.3f'], delimiter=',', header="id,price_prediction", comments='')
+    y_pred = np.mean(preds, axis = 0)
+    result = np.column_stack((X_test.index.to_numpy(), y_pred))
+    np.savetxt(r'./result.csv', result, fmt=['%d', '%.3f'], delimiter=',', header="id,price_prediction", comments='')
 
 
 # Stratified Group Split

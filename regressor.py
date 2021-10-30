@@ -258,14 +258,14 @@ if __name__ == "__main__":
         ])
         
         grid_lgbm = {
-              'model__regressor__n_estimators': np.arange(100, 2000, 100),  
-              'model__regressor__max_depth': np.arange(3, 13, 1),
-              'model__regressor__num_leaves': np.arange(2**3, 2**12, 250),
+              'model__regressor__n_estimators': np.arange(3900, 5100, 100),  
+              'model__regressor__max_depth': [8],
+              'model__regressor__num_leaves': np.arange(2**3, 2**12, 100),
               'model__regressor__learning_rate': [0.1]
         }
 
         grid_catboost = {
-              'model__regressor__iterations': np.arange(100, 2500, 100),  
+              'model__regressor__iterations': np.arange(2400, 3500, 100),  
               'model__regressor__depth': np.arange(3, 10, 1),
               # 'model__regressor__l2_leaf_reg': np.arange(0.1, 1.0, 0.05),
               'model__regressor__learning_rate': [0.15]
