@@ -1,14 +1,18 @@
+from math import radians
+
 import numpy as np
 import pandas as pd
 
 from sklearn.neighbors import BallTree
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.linear_model import RidgeCV
-from sklearn.ensemble import StackingRegressor
+from sklearn.ensemble import StackingRegressor, ExtraTreesRegressor
 from sklearn.model_selection import StratifiedGroupKFold
 from sklearn.metrics import mean_squared_log_error
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.metrics.pairwise import haversine_distances
+from sklearn.experimental import enable_iterative_imputer
+from sklearn.impute import SimpleImputer, IterativeImputer
 
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
@@ -16,6 +20,7 @@ from lightgbm import LGBMRegressor
 
 pd.options.mode.chained_assignment = None
 seed = np.random.seed(0)
+THREADS = -2
 
 def rmsle(y_true, y_pred):
     return np.sqrt(mean_squared_log_error(y_true, y_pred))
@@ -34,8 +39,6 @@ def haversine_array(lat1, lng1, lat2 = 55.75, lng2 = 37.6):
 def preprocess(data_df):
     # Merge features
     data_df["street_and_address"] = data_df.street + " " + data_df.address
-    data_df["bathrooms"] = data_df.bathrooms_shared  + data_df.bathrooms_private
-    data_df["balconies_and_loggias"] = data_df.balconies + data_df.loggias
 
     # Imputing coordinates outside of moscow and NaNs
     data_df.latitude[data_df.street_and_address == "Бунинские Луга ЖК к2/2/1"] = 55.5415152
@@ -75,21 +78,23 @@ def add_features(data_df):
     # Take log of area
     data_df['area_total'] = np.log(data_df['area_total'])
     mean_sqm_price_of_cluster = []
-    for row in ind:
-        mean_sqm_price_of_cluster.append(np.nanmean(data_df.price.iloc[row]/data_df.area_total.iloc[row]))
+    for rows in ind:
+        mean_sqm_price_of_cluster.append(np.nanmean(data_df.price.iloc[rows]/data_df.area_total.iloc[rows]))
 
     data_df["mean_sqm_price_of_cluster"] = mean_sqm_price_of_cluster
 
 
 def get_model():
 
-    model_lgbm = LGBMRegressor(max_depth=6, n_jobs=-2, n_estimators=1200, learning_rate=0.1)
-    model_xgb = XGBRegressor(n_estimators=1500, max_depth=6, n_jobs=-2, learning_rate = 0.1)
-    model_cat = CatBoostRegressor(iterations=1000, depth = 7, learning_rate=0.1, silent=True)
+    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1) # , n_jobs=THREADS
+    model_xgb = XGBRegressor(n_estimators=1500, max_depth=6, learning_rate=0.1)
+    model_cat = CatBoostRegressor(iterations=1000, depth=7, learning_rate=0.1, silent=True)
+    model_extra = ExtraTreesRegressor(n_estimators=1000)
 
     trans_lgbm = TransformedTargetRegressor(regressor=model_lgbm, func=np.log1p, inverse_func=np.expm1)
     trans_xgb = TransformedTargetRegressor(regressor=model_xgb, func=np.log1p, inverse_func=np.expm1)
     trans_cat = TransformedTargetRegressor(regressor=model_cat, func=np.log1p, inverse_func=np.expm1)
+    trans_extra = TransformedTargetRegressor(regressor=model_extra, func=np.log1p, inverse_func=np.expm1)
 
     final_model = RidgeCV()
 
@@ -97,9 +102,10 @@ def get_model():
         ('xgb_tree', model_xgb),
         ("lgbm", model_lgbm),
         ('catboost', model_cat),
+        ('extra_trees', model_extra)
     ]
 
-    model_stacking = StackingRegressor(estimators=base_learners, n_jobs=-2, final_estimator=final_model, cv = 5)
+    model_stacking = StackingRegressor(estimators=base_learners, final_estimator=final_model, cv=5, n_jobs=THREADS)
     trans_stacking = TransformedTargetRegressor(regressor=model_stacking, func=np.log1p, inverse_func=np.expm1)
 
     return trans_lgbm
@@ -129,19 +135,34 @@ if __name__ == "__main__":
     # Add new features
     add_features(data_df)
 
-    data_df = data_df.drop(["address", "street", "bathrooms_shared", "bathrooms_private", "balconies", "loggias",
-        "windows_court", "windows_street", "elevator_service", "elevator_passenger", "garbage_chute", 
-        "layout", "parking", "heating", "elevator_without", "material", "phones", "seller", "district", "building_id", "id_r"], axis = 1)
+    data_df = data_df.drop(["address", "street", "windows_court", "windows_street", "elevator_service", "elevator_passenger", "garbage_chute", 
+        "layout", "parking", "heating", "elevator_without", "material", "phones", "district", "building_id", "id_r"], axis = 1) 
+    # "seller", "bathrooms_shared", "bathrooms_private", "balconies", "loggias"
 
+
+    categorical_features = ["condition", "seller", "new", "street_and_address", "sub_area"]
+    num_features = list(data_df.drop(categorical_features, axis=1).columns)
+
+    # Adding missing values as separate features
+    nan_features = data_df.drop('price', axis=1).isna().astype(int)
 
     # Impute missing values
+    iter_imputer = IterativeImputer()
+    data_df[num_features + categorical_features] = iter_imputer.fit_transform(data_df[num_features + categorical_features])
+
+    data_df = pd.merge(data_df, nan_features, left_index=True, right_index=True)
+
     data_df.fillna(-999, inplace = True)
+
+    # oh_encoder = OneHotEncoder(sparse=False)
+    # data_df = data_df.join(pd.DataFrame(oh_encoder.fit_transform(data_df[categorical_features])))
 
     # Splitting into train and test data
     X_train = data_df[0:len(train_df)]
     X_train = X_train.drop('price', axis=1)
     X_test = data_df[len(train_df):len(data_df)].drop('price', axis=1)
     y_train = train_df['price']
+
 
     # Perform cross-validation and prediction on test set
     errors = []
@@ -165,11 +186,24 @@ if __name__ == "__main__":
     print("Mean error: ", np.mean(errors))
 
 
-y_pred = np.mean(preds, axis = 0)
-result = np.column_stack((X_test.index.to_numpy(), y_pred))
-np.savetxt(r'./result.csv', result, fmt=['%d', '%.3f'], delimiter=',', header="id,price_prediction", comments='')
+    y_pred = np.mean(preds, axis = 0)
+    result = np.column_stack((X_test.index.to_numpy(), y_pred))
+    np.savetxt(r'./result.csv', result, fmt=['%d', '%.3f'], delimiter=',', header="id,price_prediction", comments='')
 
 
-# Stratified Group Split
-# Stacked: 0.1888743165146102 (0.15394), 0.18272110079641235 (0.15670), 0.16983476356751734 (0.3)
-# LGBM: 0.19207617127201926 (k=300), 0.18963043421515094 (k=150), 0.17665640688920609 (k=50)
+# Base
+# Stacked: 0.18699157235002986 (0.15348), 0.18272110079641235 (0.15670), 0.16983476356751734 (0.3)
+# LGBM: 0.19123223530194514 (k=300), 0.18963043421515094 (k=150), 0.17665640688920609 (k=50)
+
+# + Removed feature merging:
+# Stacked: 0.1866903855946278
+# LGBM: 0.19045180972718664
+
+# + Added Extra Tree Regressor
+# Stacked: 0.18637551655784695 (0.15286)
+
+# + Added IterativeImputer
+# Stacked: 0.18334376269442343 (0.15833)
+# LGBM: 0.18741017354408454
+
+# + Added IterativeImputer and nan values
