@@ -115,8 +115,7 @@ def add_features(data_df):
     wrong_life_sq_index = data_df['area_living'] > data_df['area_total']
     data_df.loc[wrong_life_sq_index, 'area_living'] = data_df.loc[wrong_life_sq_index, 'area_total'] * 3 / 5
 
-    data_df['area_kitchen_percentage']= data_df['area_kitchen'] / data_df['area_total']
-    data_df['area_living_percentage']= data_df['area_living'] / data_df['area_total']
+    
     
     #cleaning floor MAKE IT WORSE (boh substituing floor and stories)
     #wrong_floor = data_df['floor'] > data_df['stories']
@@ -129,6 +128,10 @@ def add_features(data_df):
     #examining year 
     data_df['age_of_house_before_sale'] = np.where((2018 - data_df['constructed']>0), 2018 - data_df['constructed'], 0)
     data_df['sale_before_build'] = ((2018 - data_df['constructed']) < 0).astype(int)
+
+    #Add area percentage
+    data_df['area_kitchen_percentage']= data_df['area_kitchen'] / data_df['area_total']
+    data_df['area_living_percentage']= data_df['area_living'] / data_df['area_total']
    
     return data_df
 
