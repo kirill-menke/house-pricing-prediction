@@ -114,6 +114,9 @@ def add_features(data_df):
 
     wrong_life_sq_index = data_df['area_living'] > data_df['area_total']
     data_df.loc[wrong_life_sq_index, 'area_living'] = data_df.loc[wrong_life_sq_index, 'area_total'] * 3 / 5
+
+    data_df['area_kitchen_percentage']= data_df['area_kitchen'] / data_df['area_total']
+    data_df['area_living_percentage']= data_df['area_living'] / data_df['area_total']
     
     #cleaning floor MAKE IT WORSE (boh substituing floor and stories)
     #wrong_floor = data_df['floor'] > data_df['stories']
