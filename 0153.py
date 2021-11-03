@@ -2,6 +2,7 @@ from math import radians
 
 import numpy as np
 import pandas as pd
+from scipy.sparse import data
 
 from sklearn.neighbors import BallTree, KNeighborsRegressor
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
@@ -83,6 +84,13 @@ def add_features(data_df):
 
     data_df["mean_sqm_price_of_cluster"] = mean_sqm_price_of_cluster
 
+    wrong_kitch_sq_index = data_df['area_kitchen'] > data_df['area_total']
+    data_df.loc[wrong_kitch_sq_index, 'area_kitchen'] = data_df.loc[wrong_kitch_sq_index, 'area_total'] * 1 / 3
+
+    wrong_life_sq_index = data_df['area_living'] > data_df['area_total']
+    data_df.loc[wrong_life_sq_index, 'area_living'] = data_df.loc[wrong_life_sq_index, 'area_total'] * 3 / 5
+    
+
 
 def get_model():
 
@@ -108,7 +116,7 @@ def get_model():
     model_stacking = StackingRegressor(estimators=base_learners, final_estimator=final_model, cv=5, n_jobs=THREADS)
     trans_stacking = TransformedTargetRegressor(regressor=model_stacking, func=np.log1p, inverse_func=np.expm1)
 
-    return trans_stacking
+    return trans_lgbm
 
 
 
@@ -165,26 +173,26 @@ if __name__ == "__main__":
     y_train = train_df['price']
 
 
-    # Perform cross-validation and prediction on test set
-    # errors = []
-    # preds = []
+    #Perform cross-validation and prediction on test set
+    errors = []
+    preds = []
 
-    # cv = StratifiedGroupKFold()
+    cv = StratifiedGroupKFold()
     model = get_model()
 
-    # for train_idx, val_idx in cv.split(X_train, np.log(y_train).round(), groups=train_df['building_id']):
+    for train_idx, val_idx in cv.split(X_train, np.log(y_train).round(), groups=train_df['building_id']):
 
-    #     X_train_, y_train_ = X_train.iloc[train_idx], y_train.iloc[train_idx]
-    #     X_val, y_val = X_train.iloc[val_idx], y_train.iloc[val_idx]
+         X_train_, y_train_ = X_train.iloc[train_idx], y_train.iloc[train_idx]
+         X_val, y_val = X_train.iloc[val_idx], y_train.iloc[val_idx]
 
-    #     model.fit(X_train_, y_train_)
-    #     pred = model.predict(X_val)
-    #     errors.append(rmsle(y_val, pred))
+         model.fit(X_train_, y_train_)
+         pred = model.predict(X_val)
+         errors.append(rmsle(y_val, pred))
 
-    #     preds.append(model.predict(X_test))
+         preds.append(model.predict(X_test))
 
-    #     print("Error: ", errors[-1])
-    # print("Mean error: ", np.mean(errors))
+         print("Error: ", errors[-1])
+    print("Mean error: ", np.mean(errors))
 
 
     # y_pred = np.mean(preds, axis = 0)
