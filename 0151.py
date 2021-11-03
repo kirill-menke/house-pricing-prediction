@@ -2,7 +2,7 @@ from math import radians
 
 import numpy as np
 import pandas as pd
-import geopandas as gp
+#import geopandas as gp
 
 from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
@@ -72,14 +72,14 @@ def add_features(data_df):
     data_df["sub_area_"] = LabelEncoder().fit_transform(data_df['sub_area_'])
 
     # Mapping each building to its sub_area
-    geo_df = gp.GeoDataFrame(data_df, geometry=gp.points_from_xy(data_df.longitude, data_df.latitude))
-    geo_df.crs = "EPSG:4326"
-    data_df = gp.sjoin(sub_areas_df, geo_df, how='right', predicate='contains')
-    data_df = data_df.drop(["DISTRICT", "geometry", "OKATO", "OKTMO", "OKATO_AO", "index_left"], axis=1)
-    data_df["sub_area"] = LabelEncoder().fit_transform(data_df['sub_area'])
+   # geo_df = gp.GeoDataFrame(data_df, geometry=gp.points_from_xy(data_df.longitude, data_df.latitude))
+  #  geo_df.crs = "EPSG:4326"
+   # data_df = gp.sjoin(sub_areas_df, geo_df, how='right', predicate='contains')
+   # data_df = data_df.drop(["DISTRICT", "geometry", "OKATO", "OKTMO", "OKATO_AO", "index_left"], axis=1)
+   # data_df["sub_area"] = LabelEncoder().fit_transform(data_df['sub_area'])
 
-    pca = PCA(n_components=1)
-    data_df["sub_area_pca"] = pca.fit_transform(data_df[["sub_area", "sub_area_"]]).squeeze()
+    # pca = PCA(n_components=1)
+    # data_df["sub_area_pca"] = pca.fit_transform(data_df[["sub_area", "sub_area_"]]).squeeze()
     # data_df = data_df.drop(["sub_area", "sub_area_"], axis=1)
 
 
@@ -108,6 +108,25 @@ def add_features(data_df):
     data_df["mean_sqm_price"] = mean_sqm_price
     # data_df["mean_subarea_price"] = mean_subarea_price
 
+    #cleaning area data
+    wrong_kitch_sq_index = data_df['area_kitchen'] > data_df['area_total']
+    data_df.loc[wrong_kitch_sq_index, 'area_kitchen'] = data_df.loc[wrong_kitch_sq_index, 'area_total'] * 1 / 3
+
+    wrong_life_sq_index = data_df['area_living'] > data_df['area_total']
+    data_df.loc[wrong_life_sq_index, 'area_living'] = data_df.loc[wrong_life_sq_index, 'area_total'] * 3 / 5
+    
+    #cleaning floor MAKE IT WORSE (boh substituing floor and stories)
+    #wrong_floor = data_df['floor'] > data_df['stories']
+    #data_df.loc[wrong_floor, 'stories'] = data_df.loc[wrong_floor, 'floor']
+
+    #Add floor distance from the top of the building and the percentage of the floor
+    data_df['floor_from_top'] = data_df['stories'] - data_df['floor']
+    data_df['floor_over_stories'] = data_df['floor'] / data_df['stories']
+
+    #examining year 
+    data_df['age_of_house_before_sale'] = np.where((2018 - data_df['constructed']>0), 2018 - data_df['constructed'], 0)
+    data_df['sale_before_build'] = ((2018 - data_df['constructed']) < 0).astype(int)
+   
     return data_df
 
 
@@ -150,7 +169,7 @@ if __name__ == "__main__":
     buildings_test = pd.read_csv("data/buildings_test.csv")
     subareas = pd.read_csv("data/sberbank_sub_areas.csv")
     metro_stations = pd.read_csv("data/metro_stations.csv")
-    sub_areas_df = gp.read_file('./data/mo_kag_SRHM.shp')
+    #sub_areas_df = gp.read_file('./data/mo_kag_SRHM.shp')
 
     # Merge Tables: Apartments and Buildings
     train_df = apartments_train.merge(buildings_train, left_on='building_id', right_on='id', suffixes=('', '_r')).sort_values('id').set_index('id')
