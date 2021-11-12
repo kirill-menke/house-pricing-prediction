@@ -8,7 +8,7 @@ from xgboost import XGBRegressor
 from catboost import CatBoostRegressor
 from lightgbm import LGBMRegressor
 
-from sklearn.neighbors import BallTree, KNeighborsRegressor
+from sklearn.neighbors import BallTree, KNeighborsRegressor, KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.linear_model import RidgeCV
 from sklearn.ensemble import StackingRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor
@@ -63,6 +63,7 @@ def preprocess(data_df):
     data_df["street_and_address"] = LabelEncoder().fit_transform(data_df.street_and_address)
 
 
+
 def add_features(data_df):
     # Add nearest sub_area based on its center
     bulding_locs = np.asarray(list(zip(data_df['latitude'], data_df['longitude'])))
@@ -104,7 +105,7 @@ def add_features(data_df):
     # data_df.drop(school_features, axis=1, inplace=True)
 
     
-    # Add building related features from sberbank dataset
+    # # Add building related features from sberbank dataset
     data_df['mean_green_area'] = data_df['sub_area'].map(sberbank_data.groupby("sub_area").mean().green_zone_part)
 
     # Ordinal Encoding for both sub_area variants
@@ -119,6 +120,7 @@ def add_features(data_df):
     # Add average price in the neighborhood
     tree = BallTree(data_df[["latitude", "longitude"]])
     dist, ind = tree.query(data_df[["latitude", "longitude"]], k=300)
+
     mean_sqm_price = []
     mean_subarea_price = []
 
@@ -131,18 +133,18 @@ def add_features(data_df):
     # data_df["mean_subarea_price"] = mean_subarea_price
 
 
-    #cleaning area data
+    # Cleaning area data
     # wrong_kitch_sq_index = data_df['area_kitchen'] > data_df['area_total']
     # data_df.loc[wrong_kitch_sq_index, 'area_kitchen'] = data_df.loc[wrong_kitch_sq_index, 'area_total'] * 1 / 3
 
     # wrong_life_sq_index = data_df['area_living'] > data_df['area_total']
     # data_df.loc[wrong_life_sq_index, 'area_living'] = data_df.loc[wrong_life_sq_index, 'area_total'] * 3 / 5
 
-    #Add floor distance from the top of the building and the percentage of the floor
+    # Add floor distance from the top of the building and the percentage of the floor
     # data_df['floor_from_top'] = data_df['stories'] - data_df['floor']
     # data_df['floor_over_stories'] = data_df['floor'] / data_df['stories']
 
-    #examining year 
+    # Examining year 
     # data_df['age_of_house_before_sale'] = np.where((2018 - data_df['constructed']>0), 2018 - data_df['constructed'], 0)
     # data_df['sale_before_build'] = ((2018 - data_df['constructed']) < 0).astype(int)
 
@@ -158,11 +160,11 @@ def add_features(data_df):
 
 def get_model():
 
-    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1, n_jobs=THREADS)
+    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1) # , n_jobs=THREADS
     model_xgb = XGBRegressor(n_estimators=1500, max_depth=6, learning_rate=0.1)
     model_cat = CatBoostRegressor(iterations=1000, depth=7, learning_rate=0.1, silent=True)
     model_extra = ExtraTreesRegressor(n_estimators=1000)
-    model_hist = HistGradientBoostingRegressor(max_depth=7, max_iter=500, learning_rate=0.1)
+    model_hist = HistGradientBoostingRegressor(max_depth=7, max_iter=1000, learning_rate=0.1)
 
     trans_lgbm = TransformedTargetRegressor(regressor=model_lgbm, func=np.log1p, inverse_func=np.expm1)
     trans_xgb = TransformedTargetRegressor(regressor=model_xgb, func=np.log1p, inverse_func=np.expm1)
@@ -176,13 +178,14 @@ def get_model():
         ('xgb_tree', model_xgb),
         ("lgbm", model_lgbm),
         ('catboost', model_cat),
-        ('extra_trees', model_extra)
+        ('extra_trees', model_extra),
+        ('hist_boost', model_hist)
     ]
 
     model_stacking = StackingRegressor(estimators=base_learners, final_estimator=final_model, cv=5, n_jobs=THREADS)
     trans_stacking = TransformedTargetRegressor(regressor=model_stacking, func=np.log1p, inverse_func=np.expm1)
 
-    return trans_hist
+    return trans_lgbm
 
 
 
@@ -216,7 +219,7 @@ if __name__ == "__main__":
     data_df = data_df.drop(["address", "street", "windows_court", "windows_street", "elevator_service", "elevator_passenger", "garbage_chute", 
         "layout", "parking", "heating", "elevator_without", "district", "phones", "building_id", "id_r", "material"], axis = 1)
 
-    categorical_features = ["condition", "seller", "street_and_address", "new"] # , "sub_area", "constructed"
+    categorical_features = ["condition", "seller", "new"] # , "sub_area", "constructed", "street_and_address"
     num_features = list(data_df.drop(categorical_features + ["price"], axis=1).columns)
 
     # Adding missing values as separate features
@@ -245,7 +248,7 @@ if __name__ == "__main__":
     errors = []
     preds = []
 
-    cv = StratifiedKFold(shuffle=True)
+    cv = StratifiedKFold(shuffle=True) # , random_state=42
     model = get_model()
 
 
@@ -299,6 +302,12 @@ if __name__ == "__main__":
 # Try lgbm cross validation and early stopping
 # Fill missing values in full_sq, life_sq, kitch_sq, num_room by using median of apartments in the proximity (e.g. sub_area)
 # Remove points with big difference between prediction and ground truth (Using simple xgboost): abs(y_pred - y_true)/y
+
+# Feature removal for different models
+# Models with PCA
+# Models with Data cleaning
+# Change loss functions using weights
+# Binary classification
 
 # Questions:
 # StratifiedGroupSplit not representative to leaderboard score (To which category distribution should be pay attention?)
