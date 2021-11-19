@@ -1,4 +1,7 @@
-from math import radians
+import sys
+sys.path.append('/proj/ciptmp/ny70konu/python3.9/site-packages')
+
+from supervised.automl import AutoML
 
 import numpy as np
 import pandas as pd
@@ -11,8 +14,8 @@ from lightgbm import LGBMRegressor
 from sklearn.neighbors import BallTree, KNeighborsRegressor, KDTree, NearestNeighbors
 from sklearn.preprocessing import LabelEncoder, OneHotEncoder
 from sklearn.linear_model import RidgeCV
-from sklearn.ensemble import StackingRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor
-from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
+from sklearn.ensemble import StackingRegressor, ExtraTreesRegressor, HistGradientBoostingRegressor, AdaBoostRegressor, GradientBoostingRegressor
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold, KFold
 from sklearn.metrics import mean_squared_log_error
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.metrics.pairwise import haversine_distances
@@ -105,7 +108,7 @@ def add_features(data_df):
     # data_df.drop(school_features, axis=1, inplace=True)
 
     
-    # # Add building related features from sberbank dataset
+    # Add building related features from sberbank dataset
     data_df['mean_green_area'] = data_df['sub_area'].map(sberbank_data.groupby("sub_area").mean().green_zone_part)
 
     # Ordinal Encoding for both sub_area variants
@@ -152,7 +155,6 @@ def add_features(data_df):
     # data_df['area_kitchen_percentage']= data_df['area_kitchen'] / data_df['area_total']
     # data_df['area_living_percentage']= data_df['area_living'] / data_df['area_total']
 
-
     return data_df
 
 
@@ -160,32 +162,43 @@ def add_features(data_df):
 
 def get_model():
 
-    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1) # , n_jobs=THREADS
+    model_lgbm = LGBMRegressor(max_depth=6, n_estimators=1200, learning_rate=0.1)
     model_xgb = XGBRegressor(n_estimators=1500, max_depth=6, learning_rate=0.1)
     model_cat = CatBoostRegressor(iterations=1000, depth=7, learning_rate=0.1, silent=True)
     model_extra = ExtraTreesRegressor(n_estimators=1000)
     model_hist = HistGradientBoostingRegressor(max_depth=7, max_iter=1000, learning_rate=0.1)
+    model_grad = GradientBoostingRegressor(n_estimators=1500, max_depth=6, learning_rate=0.1)
+    model_ada_lgbm = AdaBoostRegressor(base_estimator=model_lgbm, n_estimators=50)
+    model_ada_xgb = AdaBoostRegressor(base_estimator=model_xgb, n_estimators=50)
+    model_automl_comp = AutoML(mode="Compete", ml_task="regression", results_path="/proj/ciptmp/ny70konu/AutoML_25h_compete")
 
     trans_lgbm = TransformedTargetRegressor(regressor=model_lgbm, func=np.log1p, inverse_func=np.expm1)
     trans_xgb = TransformedTargetRegressor(regressor=model_xgb, func=np.log1p, inverse_func=np.expm1)
     trans_cat = TransformedTargetRegressor(regressor=model_cat, func=np.log1p, inverse_func=np.expm1)
     trans_extra = TransformedTargetRegressor(regressor=model_extra, func=np.log1p, inverse_func=np.expm1)
     trans_hist = TransformedTargetRegressor(regressor=model_hist, func=np.log1p, inverse_func=np.expm1)
+    trans_grad = TransformedTargetRegressor(regressor=model_grad, func=np.log1p, inverse_func=np.expm1)
+    trans_ada_lgbm = TransformedTargetRegressor(regressor=model_ada_lgbm, func=np.log1p, inverse_func=np.expm1)
+    trans_ada_xgb = TransformedTargetRegressor(regressor=model_ada_xgb, func=np.log1p, inverse_func=np.expm1)
+    trans_automl_comp = TransformedTargetRegressor(regressor=model_automl_comp)
 
     final_model = RidgeCV()
 
     base_learners = [
+        ('automl_compete', trans_automl_comp),
+        # ('grad_boost', trans_grad),
         ('xgb_tree', model_xgb),
         ("lgbm", model_lgbm),
         ('catboost', model_cat),
         ('extra_trees', model_extra),
-        ('hist_boost', model_hist)
+        ('hist_boost', model_hist),
+        ('ada_lgbm', model_ada_lgbm)
     ]
 
     model_stacking = StackingRegressor(estimators=base_learners, final_estimator=final_model, cv=5, n_jobs=THREADS)
     trans_stacking = TransformedTargetRegressor(regressor=model_stacking, func=np.log1p, inverse_func=np.expm1)
 
-    return trans_lgbm
+    return trans_stacking
 
 
 
@@ -202,6 +215,7 @@ if __name__ == "__main__":
     sub_area_centers = pd.read_csv("data/sberbank_sub_areas.csv")
     sub_areas = gp.read_file('data/mo_kag_SRHM.shp')
     sberbank_data = pd.read_csv("data/sberbank.csv")
+    sberbank_coordinates = pd.read_csv("data/sberbank_coordinates.csv")
 
     # Merge Tables: Apartments and Buildings
     train_df = apartments_train.merge(buildings_train, left_on='building_id', right_on='id', suffixes=('', '_r')).sort_values('id').set_index('id')
@@ -216,26 +230,13 @@ if __name__ == "__main__":
     # Add new features
     data_df = add_features(data_df)
 
-    data_df = data_df.drop(["address", "street", "windows_court", "windows_street", "elevator_service", "elevator_passenger", "garbage_chute", 
-        "layout", "parking", "heating", "elevator_without", "district", "phones", "building_id", "id_r", "material"], axis = 1)
-
-    categorical_features = ["condition", "seller", "new"] # , "sub_area", "constructed", "street_and_address"
-    num_features = list(data_df.drop(categorical_features + ["price"], axis=1).columns)
-
-    # Adding missing values as separate features
-    # nan_features = data_df.drop('price', axis=1).isna().astype(int)
-
-    # Impute missing values
-    # data_df[num_features + categorical_features] = IterativeImputer().fit_transform(data_df[num_features + categorical_features])
-    # data_df[num_features] = SimpleImputer(strategy="mean").fit_transform(data_df[num_features])
-    # data_df[categorical_features] = SimpleImputer(strategy="most_frequent").fit_transform(data_df[categorical_features])
-
-    # data_df = pd.merge(data_df, nan_features, left_index=True, right_index=True)
+    # Drop features
+    data_df["street"] = LabelEncoder().fit_transform(data_df["street"])
+    data_df = data_df.drop(["street_and_address", "address", "windows_court", "windows_street", "elevator_service", "elevator_passenger", "garbage_chute", 
+        "layout", "heating", "elevator_without", "district", "phones", "building_id", "id_r", "material", "parking"], axis = 1)
     
+    # Impute Missing values
     data_df.fillna(-999, inplace = True)
-
-    # oh_encoder = OneHotEncoder(sparse=False)
-    # data_df = data_df.join(pd.DataFrame(oh_encoder.fit_transform(data_df[categorical_features])))
 
     # Splitting into train and test data
     X_train = data_df[0:len(train_df)]
@@ -243,44 +244,40 @@ if __name__ == "__main__":
     X_test = data_df[len(train_df):len(data_df)].drop('price', axis=1)
     y_train = train_df['price']
 
-
     # Perform cross-validation and prediction on test set
     errors = []
     preds = []
 
-    cv = StratifiedKFold(shuffle=True) # , random_state=42
+    cv = StratifiedKFold(shuffle=True)
     model = get_model()
 
 
-    for train_idx, val_idx in cv.split(X_train, np.log(y_train).round()): # groups=train_df['building_id']
+    # for train_idx, val_idx in cv.split(X_train, np.log(y_train).round()): # groups=train_df['building_id']
 
-        X_train_, y_train_ = X_train.iloc[train_idx], y_train.iloc[train_idx]
-        X_val, y_val = X_train.iloc[val_idx], y_train.iloc[val_idx]
+    #     X_train_, y_train_ = X_train.iloc[train_idx], y_train.iloc[train_idx]
+    #     X_val, y_val = X_train.iloc[val_idx], y_train.iloc[val_idx]
 
-        model.fit(X_train_, y_train_)
-        pred = model.predict(X_val)
-        errors.append(rmsle(y_val, pred))
+    #     # model.fit(X_train_, y_train_)
+    #     pred = model.predict(X_val)
+    #     errors.append(rmsle(y_val, np.expm1(pred)))
 
-        preds.append(model.predict(X_test))
+    #     preds.append(model.predict(X_test))
 
-        print("Error: ", errors[-1])
-    print("Mean error: ", np.mean(errors))
+    #     print("Error: ", errors[-1])
+    # print("Mean error: ", np.mean(errors))
 
+    # model.fit(X_train, y_train)
 
-    # y_pred = np.mean(preds, axis = 0)
+    # for key, regressor in model.regressor_.named_estimators_.items():
+    #     preds.append(regressor.predict(X_test))
+
+    # y_pred = np.expm1(np.mean(preds, axis=0))
+
+    indices = X_test.index.to_numpy()
     y_pred = model.fit(X_train, y_train).predict(X_test)
-    result = np.column_stack((X_test.index.to_numpy(), y_pred))
-    np.savetxt(r'./result.csv', result, fmt=['%d', ' %.3f'], delimiter=',', header="id,price_prediction", comments='')
+    result = np.column_stack((indices, y_pred))
+    np.savetxt(r'./result_kirill.csv', result, fmt=['%d', ' %.3f'], delimiter=',', header="id,price_prediction", comments='')
 
-# Current model
-# LGBM: 0.12645358031498863 (0.15112)
-# 0.12526345616871512
-
-# Added stuff which improve the score but not uploaded:
-# - Changing position to Kremlin slightly: 55.75, 37.6 -> 55.752, 37.617
-# - Removing log of area_total
-# - Added green areas
-# (- Adding average price to balltree)
 
 # TODO
 # Predict price/sqm?
