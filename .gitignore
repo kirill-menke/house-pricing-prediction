@@ -1,7 +1,6 @@
 *.csv
 *.pdf
 *.pkl
-*.png
 
 catboost_info
 tmp_autosklearn

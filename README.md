@@ -1,4 +1,4 @@
-# Prediction of Apartment Prices in Moscow with Machine Learning
+# Prediction of Apartment Prices with Machine Learning
 This project is related to a [Kaggle competition](https://www.kaggle.com/competitions/moscow-housing-tdt4173/overview) and is about predicting the prices of apartments located in and around the city centre of Moscow in Russia. Our team reached the top 5 in the public rankings out of 61 participating teams. We utilized several state of the art machine learning architectures like LGBM, CatBoost, and XGBoost and used scikit-learn to build a final ensemble regression model.
 
 ## Project Structure
@@ -25,4 +25,4 @@ Furthermore, we found and used the following external datasets:
 
 The image below gives a rough overview of the apartment locations and the corresponding prices contained in the Kaggle dataset:
 
-![apartments_location](data/apartments_heatmap.png)
+![apartments_location](./data/apartments_heatmap.png)
